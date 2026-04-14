@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
-from app import handler
+from ingest import handler
 
 def test_valid_event():
     # basic happy path - proper event should come back 201
