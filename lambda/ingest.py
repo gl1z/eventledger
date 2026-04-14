@@ -1,55 +1,65 @@
 import json
 import os
 import uuid
-import boto3
 from datetime import datetime, timezone
 
-dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table(os.environ["TABLE_NAME"])
+import boto3
 
-# severity levels i'm accepting - anything else gets rejected
-VALID_SEVERITIES = {"low", "medium", "high", "critical"}
-
+# get the DynamoDB table from the Lambda environment
+def get_table():
+    table_name = os.environ.get("TABLE_NAME")
+    if not table_name:
+        raise RuntimeError("TABLE_NAME environment variable is not set")
+    return boto3.resource("dynamodb").Table(table_name)
 
 def handler(event, context):
+    # reject requests with no body at all
+    body = event.get("body")
+    if not body:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Missing request body"})
+        }
+
+    # reject invalid JSON instead of crashing
     try:
-        body = json.loads(event.get("body", "{}"))
+        payload = json.loads(body)
     except json.JSONDecodeError:
-        return _response(400, {"error": "invalid json"})
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid JSON"})
+        }
 
     # make sure the required fields are actually there
-    source = body.get("source")
-    severity = body.get("severity")
-    message = body.get("message")
+    required_fields = {"source", "severity", "message"}
+    if not required_fields.issubset(payload):
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Missing required fields"})
+        }
 
-    if not source or not severity or not message:
-        return _response(400, {"error": "source, severity and message are required"})
+    # severity levels i'm accepting - anything else gets rejected
+    valid_severities = {"low", "medium", "high", "critical"}
+    if payload["severity"] not in valid_severities:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid severity"})
+        }
 
-    if severity not in VALID_SEVERITIES:
-        return _response(400, {"error": f"severity must be one of {VALID_SEVERITIES}"})
+    # build the event record with a unique id and UTC timestamp
+    item = {
+        "event_id": str(uuid.uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": payload["source"],
+        "severity": payload["severity"],
+        "message": payload["message"],
+    }
 
-    event_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
+    # write the event into DynamoDB
+    table = get_table()
+    table.put_item(Item=item)
 
-    # write the event to dynamo
-    table.put_item(Item={
-        "event_id": event_id,
-        "timestamp": timestamp,
-        "source": source,
-        "severity": severity,
-        "message": message,
-    })
-
-    return _response(201, {
-        "event_id": event_id,
-        "timestamp": timestamp,
-        "status": "recorded",
-    })
-
-
-def _response(status_code, body):
     return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body),
+        "statusCode": 201,
+        "body": json.dumps({"message": "Event stored", "event_id": item["event_id"]})
     }
