@@ -76,7 +76,7 @@ class EventledgerStack(Stack):
             ),
             cloudwatch.GraphWidget(
                 title="Lambda Duration P95",
-                left=[handler.metric_duration()],
+                left=[handler.metric_duration(statistic="p95")],
             ),
         )
         
