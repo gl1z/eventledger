@@ -8,8 +8,6 @@ Built with AWS Lambda, API Gateway, and DynamoDB. Deployed as infrastructure as 
 
 POST /events → API Gateway → Lambda (`ingest.py`) → DynamoDB
 
-CloudWatch dashboard tracks invocations, errors, and duration.
-
 ## Event schema
 
 ```json
@@ -41,15 +39,19 @@ cdk deploy
 
 ## Example request
 
-```bash
-curl -X POST https://YOUR_API_ID.execute-api.YOUR_REGION.amazonaws.com/prod/events ^
-  -H "Content-Type: application/json" ^
-  -d "{\"source\":\"auth-service\",\"severity\":\"high\",\"message\":\"failed login attempt\"}"
+```powershell
+Invoke-RestMethod -Uri "https://uicfjxipwl.execute-api.eu-west-2.amazonaws.com/prod/events" -Method POST -ContentType "application/json" -Body '{"source":"auth-service","severity":"high","message":"multiple failed login attempts detected"}'
 ```
+
+## Monitoring
+
+CloudWatch dashboard tracks Lambda invocations, errors, and duration (P95).
+
+![CloudWatch Dashboard](docs/dashboard.png)
 
 ## Stack
 
 - **API Gateway** — REST API with a single `POST /events` endpoint
 - **Lambda** — Python 3.12 function that validates and writes events
 - **DynamoDB** — on-demand table storing event records
-- **CloudWatch** — dashboard with invocation count, error rate, and duration
+- **CloudWatch** — dashboard with invocation count, error rate, and duration (P95)
